@@ -3,29 +3,36 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BMI Pro</title>
+<title>BMI Ultra Pro</title>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
 body {
-  font-family: Arial, sans-serif;
-  background: #f0f4f0;
+  font-family: Arial;
+  background: linear-gradient(135deg,#d8f3dc,#edf6f9);
+  margin: 0;
   text-align: center;
-  padding: 20px;
 }
 
 .container {
-  max-width: 400px;
+  max-width: 500px;
   margin: auto;
+  padding: 20px;
+}
+
+.card {
   background: white;
   padding: 20px;
-  border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+  border-radius: 15px;
+  margin: 15px 0;
+  box-shadow: 0 5px 20px rgba(0,0,0,0.1);
 }
 
 input, select {
   width: 100%;
   padding: 10px;
-  margin: 10px 0;
+  margin: 8px 0;
   border-radius: 8px;
   border: 1px solid #ccc;
 }
@@ -33,81 +40,165 @@ input, select {
 button {
   background: #2d6a4f;
   color: white;
-  border: none;
   padding: 12px;
-  width: 100%;
+  border: none;
   border-radius: 10px;
+  width: 100%;
   cursor: pointer;
-  font-size: 16px;
 }
 
 button:hover {
   background: #1b4332;
 }
 
-.result {
-  margin-top: 20px;
-  font-size: 18px;
+.bmi {
+  font-size: 40px;
+  font-weight: bold;
 }
 
+.history {
+  font-size: 14px;
+  text-align: left;
+}
+
+.dark {
+  background: #111;
+  color: white;
+}
+
+.toggle {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  cursor: pointer;
+}
 </style>
 </head>
 
 <body>
 
+<div class="toggle" onclick="toggleMode()">🌙</div>
+
 <div class="container">
-  <h2>BMI Calculator</h2>
 
-  <input type="number" id="height" placeholder="Height (cm)">
-  <input type="number" id="weight" placeholder="Weight (kg)">
-  <input type="number" id="age" placeholder="Age">
+<h2>🔥 BMI ULTRA PRO</h2>
 
-  <select id="sex">
-    <option value="male">Male</option>
-    <option value="female">Female</option>
-  </select>
+<div class="card">
+<input id="height" placeholder="Height (cm)" type="number">
+<input id="weight" placeholder="Weight (kg)" type="number">
+<input id="age" placeholder="Age" type="number">
 
-  <button onclick="calculateBMI()">Calculate</button>
+<select id="sex">
+<option value="male">Male</option>
+<option value="female">Female</option>
+</select>
 
-  <div class="result" id="result"></div>
+<button onclick="calculate()">Calculate</button>
+</div>
+
+<div class="card">
+<div class="bmi" id="bmi">--</div>
+<div id="category"></div>
+<div id="bmr"></div>
+<div id="advice"></div>
+</div>
+
+<div class="card">
+<canvas id="chart"></canvas>
+</div>
+
+<div class="card">
+<h3>📊 History</h3>
+<div id="history" class="history"></div>
+</div>
+
+<div class="card">
+<h3>🍛 AI Diet Plan</h3>
+<div id="diet"></div>
+</div>
+
 </div>
 
 <script>
-function calculateBMI() {
-  let height = document.getElementById("height").value;
-  let weight = document.getElementById("weight").value;
+let historyData = JSON.parse(localStorage.getItem("bmiHist")) || [];
+
+function calculate() {
+  let h = document.getElementById("height").value / 100;
+  let w = document.getElementById("weight").value;
   let age = document.getElementById("age").value;
   let sex = document.getElementById("sex").value;
 
-  if (!height || !weight) {
-    alert("Enter valid values");
-    return;
-  }
+  let bmi = (w / (h*h)).toFixed(1);
 
-  let h = height / 100;
-  let bmi = weight / (h * h);
-  bmi = bmi.toFixed(1);
+  let cat="";
+  if(bmi<18.5) cat="Underweight";
+  else if(bmi<25) cat="Normal";
+  else if(bmi<30) cat="Overweight";
+  else cat="Obese";
 
-  let category = "";
+  let bmr = sex=="male" ? (10*w+6.25*h*100-5*age+5)
+                        : (10*w+6.25*h*100-5*age-161);
 
-  if (bmi < 18.5) category = "Underweight";
-  else if (bmi < 25) category = "Normal";
-  else if (bmi < 30) category = "Overweight";
-  else category = "Obese";
+  document.getElementById("bmi").innerText=bmi;
+  document.getElementById("category").innerText=cat;
+  document.getElementById("bmr").innerText="Calories: "+Math.round(bmr);
 
-  // BMR Calculation
-  let bmr;
-  if (sex === "male") {
-    bmr = 10 * weight + 6.25 * height - 5 * age + 5;
-  } else {
-    bmr = 10 * weight + 6.25 * height - 5 * age - 161;
-  }
+  let advice="";
+  if(cat=="Underweight") advice="Eat more protein & calories";
+  if(cat=="Normal") advice="Maintain healthy lifestyle";
+  if(cat=="Overweight") advice="Exercise & reduce sugar";
+  if(cat=="Obese") advice="Consult doctor & reduce weight";
 
-  document.getElementById("result").innerHTML =
-    `<b>BMI:</b> ${bmi}<br>
-     <b>Category:</b> ${category}<br>
-     <b>BMR:</b> ${Math.round(bmr)} kcal/day`;
+  document.getElementById("advice").innerText=advice;
+
+  // Save history
+  historyData.push(bmi);
+  localStorage.setItem("bmiHist", JSON.stringify(historyData));
+  showHistory();
+
+  drawChart();
+  generateDiet(cat);
 }
+
+function showHistory(){
+  let html="";
+  historyData.slice(-5).forEach(x=>{
+    html += "BMI: "+x+"<br>";
+  });
+  document.getElementById("history").innerHTML=html;
+}
+
+function drawChart(){
+  new Chart(document.getElementById("chart"), {
+    type: 'line',
+    data: {
+      labels: historyData.map((_,i)=>i+1),
+      datasets: [{
+        label: 'BMI Trend',
+        data: historyData,
+        borderWidth: 2
+      }]
+    }
+  });
+}
+
+function generateDiet(cat){
+  let diet="";
+  if(cat=="Underweight"){
+    diet="🍛 Rice, milk, banana, eggs";
+  } else if(cat=="Normal"){
+    diet="🥗 Balanced diet with veggies";
+  } else {
+    diet="🥦 Low carb, high protein diet";
+  }
+  document.getElementById("diet").innerText=diet;
+}
+
+function toggleMode(){
+  document.body.classList.toggle("dark");
+}
+
+showHistory();
 </script>
 
 </body>
